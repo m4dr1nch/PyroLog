@@ -16,7 +16,7 @@ __author__ = 'm4dr1nch'
 __date__ = '2022/09/05'
 __deprecated__ = False
 __license__ = 'GPLv3'
-__version__ = '1.2'
+__version__ = '1.3'
 
 import sys
 import os
