@@ -226,10 +226,10 @@ def deleteFiles():
 
 def deleteLogDirs():
     write('Looking for files in common directories...', 2)
-    for folder in logFileDirs:
+    for directory in logFileDirs:
         try:
-            for file in os.listdir(folder):
-                file_path = os.path.join(folder, file)
+            for file in os.listdir(directory):
+                file_path = os.path.join(directory, file)
                 try:
                     if os.path.isfile(file_path) or os.path.islink(file_path):
                         os.unlink(file_path)
@@ -238,7 +238,39 @@ def deleteLogDirs():
                 except:
                     write(f'Failed to delete: {file_path}', 7)
         except:
-            write(f'Folder not found: {folder}', 7) 
+            write(f'Directory not found: {directory}', 7)
+
+def clearFiles():
+    write('Clearing log files...', 1)
+    for log in logFiles:
+        try:
+            f = open(log, 'w')
+            f.write('')
+            f.close()
+            write(f'Cleared: {log}', 6)
+        except:
+            write(f'Not found: {log}', 7)
+
+def clearLogDirs():
+    write('Looking for files in common directories...', 2)
+    for directory in logFileDirs:
+        try:
+            clearLogDir(directory)
+        except:
+            write(f'Directory not found: {directory}', 7)
+
+def clearLogDir(directory):
+    for file in os.listdir(directory):
+        file_path = os.path.join(directory, file)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                f = open(file, 'w')
+                f.write('')
+                f.close()
+            elif os.path.isdir(file_path):
+                clearLogDir(directory)
+        except:
+            write(f'Failed to delete: {file_path}', 7)
 
 def confirm():
     ans = write('Are you sure you want to delete the files? Y/n: ', 4)
@@ -265,6 +297,18 @@ def main():
                     if (not confirm()): return
                 deleteFiles()
                 deleteLogDirs()
+            elif (args['method'] == 'clear'):
+                if (uid == 0):
+                    write('Superuser privileges detected!', 5)
+                    write('This will clear all of the log files and history files!', 1)
+                    if (not confirm()): return
+                else:
+                    write('Superuser privileges not found!', 1)
+                    write('This will attempt to clear all of the log files and history files!', 1)
+                    if (not confirm()): return
+                clearFiles()
+                clearLogDirs()
+
     except:
         write('Exiting...', 2)
 
