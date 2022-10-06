@@ -14,9 +14,8 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 '''
 __author__ = 'm4dr1nch'
 __date__ = '2022/09/05'
-__deprecated__ = False
 __license__ = 'GPLv3'
-__version__ = '1.3'
+__version__ = '1.4'
 
 import sys
 import os
@@ -106,14 +105,15 @@ logFiles = [
     '/etc/httpd/logs/error_log'
 ]
 
-logFileDirs = [
+logDirs = [
     '/var/log/apt/',
     '/var/log/lxd/',
     '/var/log/tomcat9/',
     '/var/log/installer/',
     '/var/log/dist-upgrade/',
     '/var/log/journal/',
-    '/var/log/landscape/'
+    '/var/log/landscape/',
+    '/tmp/'
 ]
 
 # Terminal colors
@@ -167,23 +167,42 @@ def banner():
     print(f'      {colors.FG_RST}Version: {colors.B_CYAN}{__version__}')
     print(f'{colors.RST}')
 
+'''
+[getArgs, 09/09/2022, 1.2]
+A function that parses user arguments, and customizes the help menu.
+Returns parsed arguments in a dictionary format.
+'''
 def getArgs():
     # Help menu text
     help_text_help = 'Show this help message!'
     help_text_method = (
         'Select a method to use. Available methods:\n'
-        '1. delete\t| Permanently deletes log files;\n'
-        '2. clear\t| Fills log files with null values. Log files themselves remain;'
+        '1. delete\t| Permanently deletes target/log files;\n'
+        '2. clear\t| Fills target/log files with null values. Files themselves remain;'
     )
     help_text_scope = (
         'Select the removal scope. Available options:\n'
-        '1. all\t| Attempt to delete as many logs as possible;'
+        '1. all\t| Attempt to delete as many logs as possible;\n'
+        '2. files\t| Use only the log file wordlist;\n'
+        '3. dirs\t| Use only the directory wordlist;'
     )
+    incl_l_text_help = 'Append extra log/target files to the set wordlist.'
+    incl_d_text_help = 'Append extra log/target directories to the directory list.'
+    excl_l_text_help = 'Remove specific log/target files from the wordlist.'
+    excl_d_text_help = 'Remove specific log/target directories from the directory list.'
+    loglist_text_help = 'Use a custom wordlist of logfiles to clear.'
+    dirlist_text_help = 'Use a custom wordlist of directories to clear.'
 
     parse = argparse.ArgumentParser(add_help=False, formatter_class=RawTextHelpFormatter)
     parse.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=help_text_help)
     parse.add_argument('--method', required=True, choices=['delete', 'clear'], metavar='METHOD', help=help_text_method)
-    parse.add_argument('--scope', required=True, choices=['all'], metavar='SCOPE', help=help_text_scope)
+    parse.add_argument('--scope', required=True, choices=['all', 'files', 'dirs'], metavar='SCOPE', help=help_text_scope)
+    parse.add_argument('--incl-l', required=False, help=incl_l_text_help, metavar='PATH', )
+    parse.add_argument('--incl-d', required=False, help=incl_d_text_help, metavar='PATH')
+    parse.add_argument('--excl-l', required=False, help=excl_l_text_help, metavar='PATH')
+    parse.add_argument('--excl-d', required=False, help=excl_d_text_help, metavar='PATH')
+    parse.add_argument('--loglist', required=False, help=loglist_text_help, metavar='PATH')
+    parse.add_argument('--dirlist', required=False, help=dirlist_text_help, metavar='PATH')
 
     return vars(parse.parse_args())
 
@@ -215,100 +234,202 @@ def write(text, type):
     elif type == 7:
         print(f'{colors.BOLD}[{colors.B_RED}-{colors.FG_RST}]{colors.RST}{colors.B_RED} {text}{colors.RST}')
 
-def deleteFiles():
-    write('Deleting log files...', 1)
-    for log in logFiles:
-        try:
-            os.remove(log)
-            write(f'Removed: {log}', 6)
-        except:
-            write(f'Not found: {log}', 7)
+'''
+[deleteLogs, 08/09/2022, 1.0]
+A function used to permamently delete target/log files and target log directories.
+Used when the "delete" method is selected.
+Takes an argument that defines the scope.
+'''
+def deleteLogs(scope):
+    if scope == 'all' or scope == 'files':
+        write('Deleting log files...', 1)
+        for log in logFiles:
+            try:
+                os.remove(log)
+                write(f'Removed: {log}', 6)
+            except:
+                write(f'Not found: {log}', 7)
+    
+    if scope == 'all' or scope == 'dirs':
+        write('Looking for files in common directories...', 2)
+        for directory in logDirs:
+            try:
+                for log in os.listdir(directory):
+                    file_path = os.path.join(directory, log)
+                    try:
+                        if os.path.isfile(file_path) or os.path.islink(file_path):
+                            os.unlink(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(filepath)
+                    except:
+                        write(f'Failed to delete: {file_path}', 7)
+            except:
+                write(f'Directory not found: {directory}', 7)
 
-def deleteLogDirs():
-    write('Looking for files in common directories...', 2)
-    for directory in logFileDirs:
-        try:
-            for file in os.listdir(directory):
-                file_path = os.path.join(directory, file)
-                try:
-                    if os.path.isfile(file_path) or os.path.islink(file_path):
-                        os.unlink(file_path)
-                    elif os.path.isdir(file_path):
-                        shutil.rmtree(filepath)
-                except:
-                    write(f'Failed to delete: {file_path}', 7)
-        except:
-            write(f'Directory not found: {directory}', 7)
-
-def clearFiles():
-    write('Clearing log files...', 1)
-    for log in logFiles:
-        try:
-            f = open(log, 'w')
-            f.write('')
-            f.close()
-            write(f'Cleared: {log}', 6)
-        except:
-            write(f'Not found: {log}', 7)
-
-def clearLogDirs():
-    write('Looking for files in common directories...', 2)
-    for directory in logFileDirs:
-        try:
-            clearLogDir(directory)
-        except:
-            write(f'Directory not found: {directory}', 7)
-
-def clearLogDir(directory):
-    for file in os.listdir(directory):
-        file_path = os.path.join(directory, file)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                f = open(file, 'w')
+'''
+[clearLogs, 13/09/2022, 1.3]
+A function used to write null values to target/log files and files in target log directories.
+Used when the "clear" method is selected.
+Takes an argument that defines the scope.
+'''
+def clearLogs(scope):
+    if scope == 'all' or scope == 'files':
+        write('Clearing log files...', 1)
+        for log in logFiles:
+            try:
+                f = open(log, 'w')
                 f.write('')
                 f.close()
-            elif os.path.isdir(file_path):
-                clearLogDir(directory)
-        except:
-            write(f'Failed to delete: {file_path}', 7)
+                write(f'Cleared: {log}', 6)
+            except:
+                write(f'Not found: {log}', 7)
 
+    if scope == 'all' or scope == 'dirs':
+        write('Looking for files in common directories...', 2)
+        for directory in logDirs:
+            try:
+                clearDirRec(directory)
+            except:
+                write(f'Directory not found: {directory}', 7)
+
+'''
+[clearDirRec, 13/09/2022, 1.3]
+Function clears all of the files in a directory and if there are subdirectories then those are also cleared via recursion.
+Used in conjunction with the "clearLogs" function when the "clear" method is selected.
+'''
+def clearDirRec(directory):
+    for log in os.listdir(directory):
+        file_path = os.path.join(directory, log)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                f = open(file_path, 'w')
+                f.write('')
+                f.close()
+                write(f'Cleared: {file_path}', 6)
+            elif os.path.isdir(file_path):
+                clearDirRec(file_path)
+        except:
+            write(f'Failed to clear: {file_path}', 7)
+
+'''
+[confirm, 08/09/2022, 1.0]
+Confirmation request.
+Returns a boolean value.
+On any input returns True on "n" case-insensitive returns False.
+'''
 def confirm():
-    ans = write('Are you sure you want to delete the files? Y/n: ', 4)
-    if (str.lower(ans) == 'n'):
+    try:
+        ans = write('Are you sure you want to continue? Y/n: ', 4)
+        if (str.lower(ans) == 'n'):
+            write('Exiting...', 2)
+            return False
+        return True
+    except:
+        print()
+        write('Exiting...', 2)
+
+'''
+[readWordlist, 06/10/2022, 1.4]
+This function reads a file and returns an array split by newlines.
+The input parameter is a full path.
+On success returns an array on failure False.
+'''
+def readWordlist(input):
+    try:
+        with open(input, 'r') as wordlist:
+            return wordlist.read().strip('\n').split('\n');
+    except:
+        write(f'Failed to open: {input}', 3)
         write('Exiting...', 2)
         return False
-    return True
 
 def main():
     banner()
     args = getArgs()
     uid = os.getuid()
 
-    try:
-        if (args['scope'] == 'all'):
-            if (args['method'] == 'delete'):
-                if (uid == 0):
-                    write('Superuser privileges detected!', 5)
-                    write('This will delete all of the log and history files!', 1)
-                    if (not confirm()): return
-                else:
-                    write('Superuser privileges not found!', 1)
-                    write('This will attempt to delete all of the log files and history files!', 1)
-                    if (not confirm()): return
-                deleteFiles()
-                deleteLogDirs()
-            elif (args['method'] == 'clear'):
-                if (uid == 0):
-                    write('Superuser privileges detected!', 5)
-                    write('This will clear all of the log files and history files!', 1)
-                    if (not confirm()): return
-                else:
-                    write('Superuser privileges not found!', 1)
-                    write('This will attempt to clear all of the log files and history files!', 1)
-                    if (not confirm()): return
-                clearFiles()
-                clearLogDirs()
+    # Sets a custom wordlist if specified
+    # Runs if --loglist option is set
+    if args['loglist'] is not None:
+        wordlist = readWordlist(args['loglist'])
+        if not wordlist: return;
+        globals().update(logFiles=wordlist)
 
+    # Runs if --dirlist option is set
+    if args['dirlist'] is not None:
+        wordlist = readWordlist(args['dirlist'])
+        if not wordlist: return;
+        globals().update(logDirs=wordlist)
+
+    # Append extras to logFiles and logDirs
+    # Runs if --incl-l option is set
+    if args['incl_l'] is not None:
+        wordlist = readWordlist(args['incl_l'])
+        if not wordlist: return;
+        globals().update(logFiles=logFiles+wordlist)
+    
+    # Runs if --incl-d option is set
+    if args['incl_d'] is not None:
+        wordlist = readWordlist(args['incl_d'])
+        if not wordlist: return;
+        globals().update(logDirs=logDirs+wordlist)
+
+    # Exclude entries from logFiles and logDirs
+    # Runs if --excl-l option is set
+    if args['excl_l'] is not None:
+        wordlist = readWordlist(args['excl_l'])
+        if not wordlist: return;
+        newFiles = logFiles
+        for word in wordlist:
+            if word in newFiles:
+                newFiles.remove(word)
+        globals().update(logFiles=newFiles)
+    
+    # Runs if --excl-d option is set
+    if args['excl_d'] is not None:
+        wordlist = readWordlist(args['excl_d'])
+        if not wordlist: return;
+        newDirs = logDirs
+        for word in wordlist:
+            if word in newDirs:
+                newDirs.remove(word)
+        globals().update(logDirs=newDirs)
+
+    scope = args['scope']
+    method = args['method']
+
+    try:
+        if method == 'delete':
+            if uid == 0:
+                write('Superuser privileges detected!', 5)
+            else:
+                write('Superuser privileges not found!', 1)
+            
+            if scope == 'all':
+                write('This will delete both the log files and log directories!', 1)
+            elif scope == 'files':
+                write('This will delete only the log files!', 1)
+            elif scope == 'dirs':
+                write('This will delete only the log directories!', 1)
+            
+            if not confirm(): return
+            deleteLogs(scope)
+
+        elif method == 'clear':
+            if uid == 0:
+                write('Superuser privileges detected!', 5)
+            else:
+                write('Superuser privileges not found!', 1)
+            
+            if scope == 'all':
+                write('This will clear both the log files and log directories!', 1)
+            elif scope == 'files':
+                write('This will clear only the log files!', 1)
+            elif scope == 'dirs':
+                write('This will clear only the log directories!', 1)
+            
+            if not confirm(): return
+            clearLogs(scope)
     except:
         write('Exiting...', 2)
 
@@ -316,5 +437,4 @@ if __name__ == '__main__':
     try:
         main()
     except KeyboardInterrupt:
-        print()
         write('Exiting...', 2)
