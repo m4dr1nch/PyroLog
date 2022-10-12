@@ -15,7 +15,7 @@ this program. If not, see <http://www.gnu.org/licenses/>.
 __author__ = 'm4dr1nch'
 __date__ = '2022/09/05'
 __license__ = 'GPLv3'
-__version__ = '1.4'
+__version__ = '1.5'
 
 import sys
 import os
@@ -25,7 +25,9 @@ from argparse import RawTextHelpFormatter
 
 # This is by no means a comprehensive list.
 # Suggestions are encouraged!
-logFiles = [
+finalList = []
+
+fileList = [
     '/var/log/lastlog',
     '/var/log/messages',
     '/var/log/warn',
@@ -84,28 +86,19 @@ logFiles = [
     '/var/spool/locks',
     '/var/apache/log',
     '/var/apache/logs',
-    '/usr/local/apache/log',
-    '/usr/local/apache/logs',
-    '/root/.ksh_history',
-    '/root/.bash_history',
-    '/root/.sh_history',
-    '/root/.zsh_history',
-    '/root/.history',
-    '/root/.login',
-    '/root/.logout',
-    '/root/.bash_logut',
-    '/root/.Xauthorit',
-    '/usr/local/www/logs/thttpd_log',
     '/var/adm',
     '/var/run/utmp',
+    '/var/account/pacct',
+    '/usr/local/apache/log',
+    '/usr/local/apache/logs',
+    '/usr/local/www/logs/thttpd_log',
     '/etc/wtmp',
     '/etc/utmp',
     '/etc/mail/access',
-    '/var/account/pacct',
     '/etc/httpd/logs/error_log'
 ]
 
-logDirs = [
+directoryList = [
     '/var/log/apt/',
     '/var/log/lxd/',
     '/var/log/tomcat9/',
@@ -115,6 +108,19 @@ logDirs = [
     '/var/log/landscape/',
     '/tmp/'
 ]
+
+homeFileList = [
+    '{USER_DIR}/.ksh_history',
+    '{USER_DIR}/.bash_history',
+    '{USER_DIR}/.sh_history',
+    '{USER_DIR}/.zsh_history',
+    '{USER_DIR}/.history',
+    '{USER_DIR}/.login',
+    '{USER_DIR}/.logout',
+    '{USER_DIR}/.bash_logut',
+    '{USER_DIR}/.Xauthorit'
+]
+
 
 # Terminal colors
 class colors:
@@ -140,6 +146,7 @@ class colors:
     B_GREEN = '\033[92m'
     B_YELLOW = '\033[93m'
     B_CYAN = '\033[96m'
+
 
 def banner():
     print(f'{colors.BOLD}{colors.B_RED}')
@@ -167,6 +174,7 @@ def banner():
     print(f'      {colors.FG_RST}Version: {colors.B_CYAN}{__version__}')
     print(f'{colors.RST}')
 
+
 '''
 [getArgs, 09/09/2022, 1.2]
 A function that parses user arguments, and customizes the help menu.
@@ -181,30 +189,40 @@ def getArgs():
         '2. clear\t| Fills target/log files with null values. Files themselves remain;'
     )
     help_text_scope = (
-        'Select the removal scope. Available options:\n'
-        '1. all\t| Attempt to delete as many logs as possible;\n'
-        '2. files\t| Use only the log file wordlist;\n'
-        '3. dirs\t| Use only the directory wordlist;'
+        'Select the removal scope. Format: "option,option".\n'
+        'Available options:\n'
+        '1. all\t| Select all of the options (Dangerous);\n'
+        '2. files\t| Use the wordlist with common log files;\n'
+        '3. dirs\t| Select a wordlist of directories to recursively remove files in;\n'
+        '4. custom\t| Select a custom wordlist, or include/exclude files from the default lists;\n'
+        '5. home\t| Remove predefined history/log files in home directories;'
     )
-    incl_l_text_help = 'Append extra log/target files to the set wordlist.'
-    incl_d_text_help = 'Append extra log/target directories to the directory list.'
-    excl_l_text_help = 'Remove specific log/target files from the wordlist.'
-    excl_d_text_help = 'Remove specific log/target directories from the directory list.'
+    append_f_text_help = 'Append extra log/target files to the set wordlist.'
+    append_d_text_help = 'Append extra log/target directories to the directory list.'
+    remove_f_text_help = 'Remove specific log/target files from the wordlist.'
+    remove_d_text_help = 'Remove specific log/target directories from the directory list.'
     loglist_text_help = 'Use a custom wordlist of logfiles to clear.'
     dirlist_text_help = 'Use a custom wordlist of directories to clear.'
 
-    parse = argparse.ArgumentParser(add_help=False, formatter_class=RawTextHelpFormatter)
-    parse.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=help_text_help)
-    parse.add_argument('--method', required=True, choices=['delete', 'clear'], metavar='METHOD', help=help_text_method)
-    parse.add_argument('--scope', required=True, choices=['all', 'files', 'dirs'], metavar='SCOPE', help=help_text_scope)
-    parse.add_argument('--incl-l', required=False, help=incl_l_text_help, metavar='PATH', )
-    parse.add_argument('--incl-d', required=False, help=incl_d_text_help, metavar='PATH')
-    parse.add_argument('--excl-l', required=False, help=excl_l_text_help, metavar='PATH')
-    parse.add_argument('--excl-d', required=False, help=excl_d_text_help, metavar='PATH')
-    parse.add_argument('--loglist', required=False, help=loglist_text_help, metavar='PATH')
-    parse.add_argument('--dirlist', required=False, help=dirlist_text_help, metavar='PATH')
+    usage = 'pyrolog.py [-h] --method METHOD --scope SCOPE [OPTIONS]'
+
+    parse = argparse.ArgumentParser(add_help=False, formatter_class=RawTextHelpFormatter, usage=usage)
+
+    required = parse.add_argument_group('Required options')
+    required.add_argument('-h', '--help', action='help', default=argparse.SUPPRESS, help=help_text_help)
+    required.add_argument('--method', required=True, choices=['delete', 'clear'], metavar='METHOD', help=help_text_method)
+    required.add_argument('--scope', required=True, metavar='SCOPE', help=help_text_scope)
+
+    custom = parse.add_argument_group('Custom wordlist options')
+    custom.add_argument('-af', required=False, help=append_f_text_help, metavar='PATH', )
+    custom.add_argument('-ad', required=False, help=append_d_text_help, metavar='PATH')
+    custom.add_argument('-rf', required=False, help=remove_f_text_help, metavar='PATH')
+    custom.add_argument('-rd', required=False, help=remove_d_text_help, metavar='PATH')
+    custom.add_argument('--loglist', required=False, help=loglist_text_help, metavar='PATH')
+    custom.add_argument('--dirlist', required=False, help=dirlist_text_help, metavar='PATH')
 
     return vars(parse.parse_args())
+
 
 '''
 Print colored output to the screen.
@@ -218,98 +236,59 @@ Available types (Int):
 7. FAILED   (Small)
 '''
 def write(text, type):
-    if type == 1:
-        print(f'{colors.BOLD}{colors.BG_YELLOW}{colors.BLACK}[WARNING]{colors.RST} {text}')
-    elif type == 2:
-        print(f'{colors.BOLD}[{colors.YELLOW}INFO{colors.FG_RST}]{colors.RST} {text}')
-    elif type == 3:
-        print(f'{colors.BOLD}[{colors.B_RED}ERROR{colors.FG_RST}]{colors.RST}{colors.B_RED} {text}{colors.RST}')
-    elif type == 4:
-        ans = input(f'{colors.BOLD}{colors.BG_CYAN}[CONFIRM]{colors.RST} {text}')
-        return ans
-    elif type == 5:
-        print(f'{colors.BOLD}{colors.BG_RED}[DANGER]{colors.BG_RST}{colors.B_RED} {text}{colors.RST}')
-    elif type == 6:
-        print(f'{colors.BOLD}[{colors.B_GREEN}+{colors.FG_RST}]{colors.RST}{colors.B_GREEN} {text}{colors.RST}')
-    elif type == 7:
-        print(f'{colors.BOLD}[{colors.B_RED}-{colors.FG_RST}]{colors.RST}{colors.B_RED} {text}{colors.RST}')
+    if type == 1: print(f'{colors.BOLD}{colors.BG_YELLOW}{colors.BLACK}[WARNING]{colors.RST} {text}')
+    elif type == 2: print(f'{colors.BOLD}[{colors.YELLOW}INFO{colors.FG_RST}]{colors.RST} {text}')
+    elif type == 3: print(f'{colors.BOLD}[{colors.B_RED}ERROR{colors.FG_RST}]{colors.RST}{colors.B_RED} {text}{colors.RST}')
+    elif type == 4: return input(f'{colors.BOLD}{colors.BG_CYAN}[CONFIRM]{colors.RST} {text}')
+    elif type == 5: print(f'{colors.BOLD}{colors.BG_RED}[DANGER]{colors.BG_RST}{colors.B_RED} {text}{colors.RST}')
+    elif type == 6: print(f'{colors.BOLD}[{colors.B_GREEN}+{colors.FG_RST}]{colors.RST}{colors.B_GREEN} {text}{colors.RST}')
+    elif type == 7: print(f'{colors.BOLD}[{colors.B_RED}-{colors.FG_RST}]{colors.RST}{colors.B_RED} {text}{colors.RST}')
+
 
 '''
 [deleteLogs, 08/09/2022, 1.0]
-A function used to permamently delete target/log files and target log directories.
+A function used to permamently delete target/log files.
 Used when the "delete" method is selected.
-Takes an argument that defines the scope.
 '''
-def deleteLogs(scope):
-    if scope == 'all' or scope == 'files':
-        write('Deleting log files...', 1)
-        for log in logFiles:
-            try:
-                os.remove(log)
-                write(f'Removed: {log}', 6)
-            except:
-                write(f'Not found: {log}', 7)
-    
-    if scope == 'all' or scope == 'dirs':
-        write('Looking for files in common directories...', 2)
-        for directory in logDirs:
-            try:
-                for log in os.listdir(directory):
-                    file_path = os.path.join(directory, log)
-                    try:
-                        if os.path.isfile(file_path) or os.path.islink(file_path):
-                            os.unlink(file_path)
-                        elif os.path.isdir(file_path):
-                            shutil.rmtree(filepath)
-                    except:
-                        write(f'Failed to delete: {file_path}', 7)
-            except:
-                write(f'Directory not found: {directory}', 7)
+def deleteLogs():
+    if len(finalList) == 0:
+        write('Nothing to do ¯\_(ツ)_/¯!', 2)
+        write('Exiting...', 2)
+        return
+    write('Deleting log files...', 1)
+    for log in finalList:
+        try:
+            os.remove(log)
+            write(f'Removed: {log}', 6)
+        except PermissionError:
+            write(f'Permission denied: {log}', 7)
+        except:
+            continue
+
 
 '''
 [clearLogs, 13/09/2022, 1.3]
-A function used to write null values to target/log files and files in target log directories.
+A function used to write null values to target/log files.
 Used when the "clear" method is selected.
-Takes an argument that defines the scope.
 '''
-def clearLogs(scope):
-    if scope == 'all' or scope == 'files':
-        write('Clearing log files...', 1)
-        for log in logFiles:
-            try:
+def clearLogs():
+    if len(finalList) == 0:
+        write('Nothing to do ¯\_(ツ)_/¯!', 2)
+        write('Exiting...', 2)
+        return
+    write('Clearing log files...', 1)
+    for log in finalList:
+        try:
+            if (os.path.exists(log)):
                 f = open(log, 'w')
                 f.write('')
                 f.close()
                 write(f'Cleared: {log}', 6)
-            except:
-                write(f'Not found: {log}', 7)
-
-    if scope == 'all' or scope == 'dirs':
-        write('Looking for files in common directories...', 2)
-        for directory in logDirs:
-            try:
-                clearDirRec(directory)
-            except:
-                write(f'Directory not found: {directory}', 7)
-
-'''
-[clearDirRec, 13/09/2022, 1.3]
-Function clears all of the files in a directory and if there are subdirectories then those are also cleared via recursion.
-Used in conjunction with the "clearLogs" function when the "clear" method is selected.
-'''
-def clearDirRec(directory):
-    for log in os.listdir(directory):
-        file_path = os.path.join(directory, log)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                f = open(file_path, 'w')
-                f.write('')
-                f.close()
-                write(f'Cleared: {file_path}', 6)
-            elif os.path.isdir(file_path):
-                clearDirRec(file_path)
+        except PermissionError:
+            write(f'Permission denied: {log}', 7)
         except:
-            write(f'Failed to clear: {file_path}', 7)
+            continue
+
 
 '''
 [confirm, 08/09/2022, 1.0]
@@ -328,6 +307,7 @@ def confirm():
         print()
         write('Exiting...', 2)
 
+
 '''
 [readWordlist, 06/10/2022, 1.4]
 This function reads a file and returns an array split by newlines.
@@ -337,101 +317,146 @@ On success returns an array on failure False.
 def readWordlist(input):
     try:
         with open(input, 'r') as wordlist:
-            return wordlist.read().strip('\n').split('\n');
+            return wordlist.read().strip('\n').split('\n')
     except:
         write(f'Failed to open: {input}', 3)
         write('Exiting...', 2)
         return False
+
+
+'''
+[createList, 11/10/2022, 1.5]
+This function creates the final wordlist of files to be removed.
+Takes an argument that is a list of input options.
+Returns False on error and True on success.
+'''
+def createList(args):
+    scope = args['scope']
+    scope = scope.split(',')
+
+    if 'all' in scope:
+        write('Scope is set to "all"!', 5)
+        scope = ['custom', 'files', 'dirs', 'home']
+
+    if 'custom' in scope:
+        # Adds a custom wordlist to the finalList
+        # Runs if --loglist option is set
+        if args['loglist'] is not None:
+            wordlist = readWordlist(args['loglist'])
+            if not wordlist: return False
+            globals().update(finalList=wordlist)
+
+        # Runs if --dirlist option is set
+        if args['dirlist'] is not None:
+            wordlist = readWordlist(args['dirlist'])
+            if not wordlist: return False
+            globals().update(directoryList=wordlist)
+
+        # Append extras to the finalList or the directoryList
+        # Runs if -af option is set
+        if args['af'] is not None:
+            wordlist = readWordlist(args['af'])
+            if not wordlist: return False
+            globals().update(finalList=finalList+wordlist)
+
+        # Runs if -ad option is set
+        if args['ad'] is not None:
+            wordlist = readWordlist(args['ad'])
+            if not wordlist: return False
+            globals().update(directoryList=directoryList+wordlist)
+
+        # Exclude directories from the directoryList
+        # Runs if -rd option is set
+        if args['rd'] is not None:
+            wordlist = readWordlist(args['rd'])
+            if not wordlist: return False
+            newList = directoryList
+            for word in wordlist:
+                if word in newList:
+                    newList.remove(word)
+            globals().update(directoryList=newList)
+    if 'files' in scope:
+        globals().update(finalList=finalList+fileList)
+    if 'dirs' in scope:
+        write('Looking for files in common directories...', 2)
+        dirFiles = []
+        for directory in directoryList:
+            enumDir(directory, dirFiles)
+        globals().update(finalList=finalList+dirFiles)
+    if 'home' in scope:
+        write('Looking for files in home directories...', 2)
+        passwd = readWordlist('/etc/passwd')
+        homes = ['/root']
+        files = []
+        for user in passwd:
+            user = user.split(':')
+            if 999 < int(user[2]) < 65534 and user[5] is not None:
+                homes.append(user[5])
+        for home in homes:
+            for file in homeFileList:
+                files.append(file.replace('{USER_DIR}', home))
+        globals().update(finalList=finalList+files)
+
+    # Exclude entries from the finalList
+    # Runs if -rf option is set
+    if args['rf'] is not None:
+        wordlist = readWordlist(args['rf'])
+        if not wordlist: return False
+        newList = finalList
+        for word in wordlist:
+            if word in newList:
+                newList.remove(word)
+        globals().update(finalList=newList)
+    
+    return True
+
+
+'''
+[enumDir, 12/10/2022, 1.5]
+This function uses recursion to crawl a directory.
+Takes to parameters:
+1. A starting directory;
+2. An array to store values in;
+'''
+def enumDir(directory, dirFiles):
+    try:
+        for log in os.listdir(directory):
+            file_path = os.path.join(directory, log)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    dirFiles.append(file_path)
+                elif os.path.isdir(file_path):
+                    enumDir(file_path, dirFiles)
+            except:
+                continue
+    except:
+        return
 
 def main():
     banner()
     args = getArgs()
     uid = os.getuid()
 
-    # Sets a custom wordlist if specified
-    # Runs if --loglist option is set
-    if args['loglist'] is not None:
-        wordlist = readWordlist(args['loglist'])
-        if not wordlist: return;
-        globals().update(logFiles=wordlist)
+    if uid == 0:
+        write('Superuser privileges detected!', 5)
+    else:
+        write('Superuser privileges not found!', 1)
 
-    # Runs if --dirlist option is set
-    if args['dirlist'] is not None:
-        wordlist = readWordlist(args['dirlist'])
-        if not wordlist: return;
-        globals().update(logDirs=wordlist)
+    resp = createList(args)
+    if not resp: return
 
-    # Append extras to logFiles and logDirs
-    # Runs if --incl-l option is set
-    if args['incl_l'] is not None:
-        wordlist = readWordlist(args['incl_l'])
-        if not wordlist: return;
-        globals().update(logFiles=logFiles+wordlist)
-    
-    # Runs if --incl-d option is set
-    if args['incl_d'] is not None:
-        wordlist = readWordlist(args['incl_d'])
-        if not wordlist: return;
-        globals().update(logDirs=logDirs+wordlist)
-
-    # Exclude entries from logFiles and logDirs
-    # Runs if --excl-l option is set
-    if args['excl_l'] is not None:
-        wordlist = readWordlist(args['excl_l'])
-        if not wordlist: return;
-        newFiles = logFiles
-        for word in wordlist:
-            if word in newFiles:
-                newFiles.remove(word)
-        globals().update(logFiles=newFiles)
-    
-    # Runs if --excl-d option is set
-    if args['excl_d'] is not None:
-        wordlist = readWordlist(args['excl_d'])
-        if not wordlist: return;
-        newDirs = logDirs
-        for word in wordlist:
-            if word in newDirs:
-                newDirs.remove(word)
-        globals().update(logDirs=newDirs)
-
-    scope = args['scope']
     method = args['method']
-
     try:
         if method == 'delete':
-            if uid == 0:
-                write('Superuser privileges detected!', 5)
-            else:
-                write('Superuser privileges not found!', 1)
-            
-            if scope == 'all':
-                write('This will delete both the log files and log directories!', 1)
-            elif scope == 'files':
-                write('This will delete only the log files!', 1)
-            elif scope == 'dirs':
-                write('This will delete only the log directories!', 1)
-            
             if not confirm(): return
-            deleteLogs(scope)
+            deleteLogs()
 
         elif method == 'clear':
-            if uid == 0:
-                write('Superuser privileges detected!', 5)
-            else:
-                write('Superuser privileges not found!', 1)
-            
-            if scope == 'all':
-                write('This will clear both the log files and log directories!', 1)
-            elif scope == 'files':
-                write('This will clear only the log files!', 1)
-            elif scope == 'dirs':
-                write('This will clear only the log directories!', 1)
-            
             if not confirm(): return
-            clearLogs(scope)
+            clearLogs()
     except:
         write('Exiting...', 2)
+
 
 if __name__ == '__main__':
     try:

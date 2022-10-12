@@ -9,21 +9,26 @@
 
 ## Help Menu
 ```
-usage: pyrolog.py [-h] --method METHOD --scope SCOPE [--incl-l PATH] [--incl-d PATH] [--excl-l PATH] [--excl-d PATH] [--loglist PATH] [--dirlist PATH]
+usage: pyrolog.py [-h] --method METHOD --scope SCOPE [OPTIONS]
 
-options:
+Required options:
   -h, --help       Show this help message!
   --method METHOD  Select a method to use. Available methods:
                    1. delete    | Permanently deletes target/log files;
                    2. clear     | Fills target/log files with null values. Files themselves remain;
-  --scope SCOPE    Select the removal scope. Available options:
-                   1. all       | Attempt to delete as many logs as possible;
-                   2. files     | Use only the log file wordlist;
-                   3. dirs      | Use only the directory wordlist;
-  --incl-l PATH    Append extra log/target files to the set wordlist.
-  --incl-d PATH    Append extra log/target directories to the directory list.
-  --excl-l PATH    Remove specific log/target files from the wordlist.
-  --excl-d PATH    Remove specific log/target directories from the directory list.
+  --scope SCOPE    Select the removal scope. Format: "option,option".
+                   Available options:
+                   1. all       | Select all of the options (Dangerous);
+                   2. files     | Use the wordlist with common log files;
+                   3. dirs      | Select a wordlist of directories to recursively remove files in;
+                   4. custom    | Select a custom wordlist, or include/exclude files from the default lists;
+                   5. home      | Remove predefined history/log files in home directories;
+
+Custom wordlist options:
+  -af PATH         Append extra log/target files to the set wordlist.
+  -ad PATH         Append extra log/target directories to the directory list.
+  -rf PATH         Remove specific log/target files from the wordlist.
+  -rd PATH         Remove specific log/target directories from the directory list.
   --loglist PATH   Use a custom wordlist of logfiles to clear.
   --dirlist PATH   Use a custom wordlist of directories to clear.
 ```
